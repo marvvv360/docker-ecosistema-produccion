@@ -1,0 +1,77 @@
+services:
+  # --------------------------------------------------
+  # Servicio 1: Base de Datos MySQL 8.0
+  # --------------------------------------------------
+  db:
+    image: mysql:8.0
+    container_name: app_mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_secure_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-app_database}
+      MYSQL_USER: ${MYSQL_USER:-app_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-app_secure_password}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --------------------------------------------------
+  # Servicio 2: Backend API Laravel + Nginx
+  # --------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: app_laravel_backend
+    restart: always
+    ports:
+      - "8000:80"
+    environment:
+      APP_NAME: ${APP_NAME:-LaravelAPI}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_KEY: ${APP_KEY:-base64:GENERATE_A_KEY_HERE}
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ${MYSQL_DATABASE:-app_database}
+      DB_USERNAME: ${MYSQL_USER:-app_user}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-app_secure_password}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app_network
+
+  # --------------------------------------------------
+  # Servicio 3: Frontend Next.js 16+
+  # --------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: app_nextjs_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api
+    depends_on:
+      - backend
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  db_data:
+    driver: local
